@@ -1,0 +1,389 @@
+﻿## Настройка сервисов на сервере\n\n
+Требуется провести более тонкую настройку отдельных сервисов. Результат данной работы должен выглядеть как diff-файл между стандартными настройками сервисов и доработанными в ходе тестового задания. Желательно приложить каталог с конфигурацией изменяемого сервиса.\n\n
+* Задание по настройке Nginx:\n 
+  * Настроить сжатие типов данных: text, javascript, css, json, xml\n  
+  * Разрешить максимальную загрузку данных через Nginx в соответствии с настройками PHP\n  
+  * Запретить вывод версии Nginx(при web-запросах к сайтам сервера)\n\n
+
+* Задание по настройке Apache:\n  
+  * Запретить(глобально) возможность обращения пользователей к директориям вида .svn и .git .\n 
+  * Настроить работу Apache по 81 порту на локальном ip-адресе.\n  
+  * Уменьшить максимальное количество клиентов веб-сервера до 25.\n\n
+
+
+* Задание по настройке Nginx: 
+	1) Обновляем пакеты в системе, устанавливаем nginx
+		sudo apt-get update && apt-get upgrade
+		sudo apt-get install nginx
+	2) Копируем папку с конфигурационными файлами nginx, дабы иметь оригиналы конфигов.
+		sudo mkdir /etc/nginx.orig
+		sudo cp -r /etc/nginx/* /etc/nginx.orig/
+	3) Настраиваем сжатие данных (в последних версиях nginx сжатие включено по умолчанию) в конфигурационном файле /etc/nginx/nginx.conf. Настриваем доп парметры согласно задания.
+		Задем уровень сжатия, раскомментируем строку 
+			gzip_comp_level 6;
+		Задаем размер буфера
+			gzip_buffers 16 8k;
+		Включаем сжатие для типов файлов
+			gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
+    4) В настройках PHP максимальный размер загружаемого файла - 64Мб(согласно задания). Выставляем значение в 64Мб в конфигурационном файле /etc/nginx.conf, опция client_max_body_size 64M; секция http{}
+    	client_max_body_size 64M;
+    5) Для запрета вывод версии nginx необходимо в конфигурационном файле /etc/nginx.conf выставить значение server_tokens off;
+    6) Тестируем правильность синтаксиса введенных комманд
+    	sudo nginx -t
+    7) Перезапускаем nginx
+    	sudo /etc/init.d/nginx restart
+
+* Задание по настройке Apache:
+	1) Останавливаем nginx (при установке apache2 попытается запуститься, и занять 80 порт, на котором уже висит nginx)
+		sudo /etc/init.d/nginx stop
+	2) Устанавливаем apache2
+		sudo apt-get install apache2
+	3) Создаем папку /etc/apache2.orig Копируем содержиоме /etc/apache2
+		mkdir /etc/apache2.orig
+		cp -r /etc/apache2/* /etc/apache2.orig
+    3) Запрещаем глобально доступ к директориям вида .svn и .git в конфигурационном файле /etc/apache2/conf-enabled/security.conf
+       Раскомментируем
+       	<DirectoryMatch "/\.svn">
+		   Require all denied
+		</DirectoryMatch>
+
+		Добавляем
+		<DirectoryMatch "/\.git">
+		   Require all denied
+		</DirectoryMatch>
+	4) Настраиваем работу apache2 на работу на localhost порт 81. Файл /etc/apache2/ports.conf
+		Listen 127.0.0.1:81
+	5) Проверяем правильность 
+		sudo apachectl configtest
+	6) Перезапускаем apache2 и nginx
+		sudo service apache2 restart && service nginx restart
+	7) Убеждаемся что сервисы запущены
+		sudo service apache2 status && service nginx status
+	8) Устанавливаем сетевые утилиты
+		sudo apt-get install net-tools
+	   Убеждаемся что сервисы висят на нужных портах
+	    sudo netstat -ntlp
+	9) Уменьшаем максимально кол-во клиентов до 25. ДОбавляем опцию 'MaxClients 25' в конфигурационный файл /etc/apache2/apache2.conf
+
+* Задание по настройке PHP:\n  
+   * Настроить параметры хранения сессий PHP таким образом, чтобы сессии сайтов жили минимум 1 сутки. После этого, с вероятностью 10%, сессии должны очищаться.\n  
+   * Разрешить загрузку файлов, через PHP, с максимальным объемом - 64 Мб.\n\n
+  
+
+* Задание по настройке PHP:
+	1) Т.к. явно в задании не указано в каком режиме должен работать php (php-fpm либо модуль apache) - примем решение самостоятельно в сторону php-fpm(работает быстрее+можно выбирать различные версии php для конкретных сайтов, что проблематично сделать при использовании mod_php apache2)
+	2) Т.к. версия php в задании - не указана, установим последнюю стабильную 7.4. Для этого - добавим репозиторий с 7.4.
+	    Устанавливаем пакет apt-transport-https(необходим для добавления)
+	    sudo apt-get install apt-transport-https
+		Добавляем ключ репозитория
+		sudo wget -q https://packages.sury.org/php/apt.gpg -O- | sudo apt-key add -
+		Добавляем репозиторий
+		sudo echo "deb https://packages.sury.org/php/ stretch main" | sudo tee /etc/apt/sources.list.d/php.list
+		Обновляем список пакетов
+		sudo apt-get update
+		Устанавливаем php7.4-fpm и модуль для работы с mysql 
+		sudo apt-get -y install php7.4-fpm php7.4-mysql php-mbstring
+		После установки включаем php7.4-fpm для apache2
+		sudo a2enmod proxy_fcgi setenvif
+		sudo a2enconf php7.4-fpm
+		sudo service apache2 restart
+		Создадим пользователя от которого будет работать наш сайт. Без домашней папки, и без активного шела.
+		useradd -M -r -s /bin/false siteru #От имени этого пользователя будет работать наш сайт
+		Создадим папки для хранения сессий, логов, и временных файлов для сайтов. И сменим для них владельца
+  		sudo mkdir -p /var/www/http_logs/site.ru/nginx && sudo chown siteru:siteru /var/www/http_logs/site.ru/nginx
+  		sudo mkdir -p /var/www/http_logs/site.ru/apache2 && sudo chown siteru:siteru /var/www/http_logs/site.ru/apache2
+  		sudo mkdir -p /var/www/http_sessions/site.ru && sudo chown siteru:siteru /var/www/http_sessions/site.ru
+  		sudo mkdir -p /var/www/tmp_files/site.ru && sudo chown siteru:siteru /var/www/tmp_files/site.ru
+		Создадим файл настроек site.ru.conf для нашего сайт в директории /etc/php/7.4/fpm/pool.d/ со следующим содержимым.
+			[siteru]
+			listen = /var/run/php/php7.4-siteru.sock #Зададим имя сокета согласно имени сайта
+			listen.mode = 0666 #Выставим права
+			user = siteru #Пользователь и группа из под которого будет запускаться
+			group = siteru
+			chdir = /var/www/site.ru #Папка в которой будет работать
+			listen.owner = siteru #Владелец сокета
+			listen.group = siteru
+
+			#Изменяем настройки php для сайта. Папка с временными файлами, папка для хранения сессий. Запрещенные функции php
+			php_admin_value[upload_tmp_dir] = /var/www/tmp_files/site.ru 
+			php_admin_value[session.save_path] = /var/www/http_sessions/site.ru
+			php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source
+			pm = ondemand
+			pm.max_children = 4
+
+
+
+    3) Задание времени жизни сессии. Просматриваем текущие значения
+    	sudo php -i | grep session
+       Нас интересует параметр session.gc_maxlifetime. По умолчанию он равено 1440сек(24 мин). Нам необходимо выставить значение равное 24 часам - 24*60*60=86400
+       Находим параметр session.gc_maxlifetime в файле конфигурации /etc/php/7.4/fpm/php.ini и заменяем его на 86400
+       Вероятность очиски рассчитывается как gc_probability/gc_divisor. Соответственно для 10% вероятности необходимо установить соответственно занчения 1 и 10.
+       Для задания макс объема загружаемых файлов необходимо установить upload_max_filesize в значение 64М. Также необходимо увеличить значение post_max_sizе до 64.
+       Перезапускаем php-fpm
+       sudo etc/init.d/php7.4-fpm restart
+    
+
+* Задание по настройке MySQL:\n  
+   * Выделить для кэша запросов 32 Мб ОЗУ.\n  
+   * Размер временных таблиц установить в 50 Мб.\n  
+   * Количество кэшированных потоков(нитей) должно быть не ниже 20.\n 
+   * Все InnoDB-таблицы должны храниться в отдельных файлах\n\n
+
+* Задание по настройке MySQL:
+	1) Устанвливем mysql-server (начиная с Debian 9 пакет mysql заменен на MariaDB, разработанный сообществом ответвление проекта MySQL)
+		sudo apt-get install mysql-server
+	   Делаем первоначальную настройку, запускаем
+	    mysql_secure_installation
+	   Устанавливаем пароль для пользователя root
+	2) Создаем папку /etc/mysql.orig
+	   sudo mkdir /etc/mysql.orig
+	   Копируем папку /etc/mysql в /etc/mysql.orig
+	   sudo cp -r /etc/mysql/* /etc/mysql.orig
+	3) Правим конфигурационный файл /etc/mysql/mariadb.conf.d/50-server.cnf  согласно задания
+	   Кеш запросов - параметр query_cache_size - устанавливаем в 32Мб
+       Размер временных таблиц - парметр tmp_table_size = 50M
+       Количество кэшированных потоков thread_cache_size = 20
+       Все InnoDB-таблицы должны храниться в отдельных файлах -  за это отвечает параметр innodb_file_per_table=1
+    4) По умолчанию в mysql используется метод авторизации unix_socket. для подключения и настройки его необходимо заменить на native_password
+       Останавливаем mysql
+       service mysql stop
+       Запускаем Mysql в безопасном режиме
+       mysqld_safe --skip-grant-tables --skip-networking &
+       Подключаемся к mysql
+       mysql -u root
+         UPDATE user SET plugin='' WHERE user ='root'; 
+         UPDATE mysql.user SET authentication_string = PASSWORD('UNCOMPROMISABLE_STRONGHOLD_PASSWORD') WHERE User = 'root' AND Host = 'localhost';
+
+    5) Перезапускаем mysql
+       sudo /etc/init.d/mysql restart
+
+
+
+
+
+ ## Настройка площадок на сервере\n\n
+ По результатам работы должно получиться 2 площадки под сайты, которые будут обслуживать сайты (site.ru и site-2.ru). Так же должен работать PMA как алиас к обоим площадкам.\n\n
+
+* Задание по настройке площадки для работы сайта site.ru:\n  
+   * Необходимо настроить связку Nginx+Apache2+PHP+MySQL для работы сайта(site.ru).\n  
+   * На сервере подготовить площадку под сайт и развернуть в рамках неё CMS WordPress\n  
+   * Настроить web-сервер таким образом, чтобы все запросы к статическим данным, начинающиеся с: http://site.ru/wp-includes/, обрабатывались Nginx, а все остальные - передавались на обработку Apache2.\n  
+   * При этом, все подобные запросы, которые Nginx должен был, но по каким-то причинам не смог обработать самостоятельно - должны передаваться на Apache2 (т.е., если файла http://site.ru/wp-includes/js/test-nixys.js нет и Nginx, разумеется, не может отдать такой файл, то такие запросы должны быть переданы на обработку Apache2).\n  
+   * Настроить минимально необходимые для работы Nginx и Apache права на площадку для сайта.\n\n
+
+Задание по настройке площадки для работы сайта site.ru:
+
+  1) Отключаем default сайт в апаче
+  		sudo a2dissite 000-default.conf
+
+
+  2) Создадим в папке /etc/apache2/sites-available кофнигурационный файл для нашего сайта
+  		sudo touch /etc/apache2/sites-available/site.ru.conf
+  		Со следующим содержимым
+  		<VirtualHost 127.0.0.1:81> #Вешаем на локалхост 81 порт
+    	ServerName site.ru  #Задаем имя сайта
+    	ServerAdmin mail@site.ru #Указываем почту администратора
+    	DocumentRoot /var/www/site.ru #Указываем корневую директорию
+    	CustomLog /var/www/http_logs/site.ru/apache2/site.ru.access.log combined  #Задаем пути для файлов логов (acces и error)
+    	ErrorLog /var/www/http_logs/site.ru/apache2/site.ru.error.log
+        	<Directory /var/www/site.ru>
+                Options -Includes -Indexes -ExecCGI #Запрещаем посмотр директорий
+                AllowOverride All #Разрешаем использование .htaccess
+        	</Directory>
+        	<FilesMatch \.php$> #Включаем обработку php через php-fpm
+                SetHandler "proxy:unix:/var/run/php/php7.4-siteru.sock|fcgi://localhost/"
+        	</FilesMatch>
+		</VirtualHost>
+
+    3) Создаем директорию для нашего сайта
+       sudo mkdir /var/www/site.ru
+       Меняем владельца на пользователя от которого запущен веб сервер
+       sudo chown siteru:siteru /var/www/site.ru
+
+    4) Включаем наш сайт (можно сделать вручную созданием символической ссылки)
+    	sudo a2ensite site.ru.conf
+
+    5) Создаем конфигурационный файл для сайта для nginx в /etc/nginx/sites-available/site.ru.conf со следующим содержимым
+
+    			server {
+  				listen 80; #Вешаем на 80 порт
+  				server_name site.ru; #Задаем имя сайта
+
+  				root /var/www/site.ru; #Указываем корневую директорию
+  				charset utf-8; #Задаем кодировку
+
+  				access_log /var/www/http_logs/site.ru/nginx/site.ru-access.log; #Указываем пути для логов
+  				error_log /var/www/http_logs/site.ru/nginx/site.ru-error.log;
+
+  				index index.html index.htm index.php; #Задаем индексные страницы
+  				# Блок с обработчиком php (куда перенаправлять php - в нашем случае этим занимается apache2)
+				location @php {
+  				proxy_pass http://127.0.0.1:81$request_uri;
+  				proxy_set_header Host $host;
+  				proxy_set_header X-Real-IP $remote_addr;
+  				proxy_set_header X-Forwarded-For $remote_addr;
+  				proxy_connect_timeout 120;
+  				proxy_send_timeout 120;
+  				proxy_read_timeout 180;
+				}
+
+				#Указываем как обрабатывать php и куда отправлять запросы которые не может обработать nginx
+				location ~ [^/]\.ph(p\d*|tml)$ { 
+				try_files /does_not_exists @php;
+				}
+				# Блок для обработки статичных данных от директории /var/www/site.ru/wp-includes
+				# Файлы каталогом выше - обрабатываются через apache2,  в этом можно убедиться посмотрев логи
+				location ~ \.(gif|jpg|png|ico|zip|bmp|xls|rar)$ {
+  				root /var/www/site.ru/wp-includes;
+  				try_files /does_not_exists @php;
+				}
+				#Запрещаем доступ к файлам .htaccess
+				location ~ /\.ht {
+  				deny all;
+				}
+
+				}
+
+    6) Подключаемся к серверу mysql для создания БД для нашего сайта на wordpress.
+    	sudo mysql -u root -p  #Вводим пароль от пользователя root
+    	CREATE DATABASE site_ru;  #Создаем БД
+    	CREATE USER 'siteru'@'localhost' IDENTIFIED BY 'Level123'; # Создаем пользователя siteru с паролем Level123
+        GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, DROP, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES ON site_ru.* TO 'siteru'@'localhost';  # Выдаем привелегии на БД
+        FLUSH PRIVILEGES; # Перечитываем привидегии
+
+    7) Скачиваем последнюю версию WP
+        sudo wget https://ru.wordpress.org/latest-ru_RU.tar.gz
+
+    8) Распаковывем
+        tar -xvf latest-ru_RU.tar.gz
+    9) Копируем в директорию с сайтом, меняем владельца.
+    	 sudo cp -r wordpress/* /var/www/site.ru/
+    	 sudo chown -R siteru:siteru /var/www/site.ru
+    10) Переходим по адресу http://site.ru завершаем установку wordpress.
+
+
+
+  
+* Задание по настройке площадки для работы сайта site-2.ru:\n  
+   * Необходимо настроить связку Nginx+Apache2+PHP для работы сайта(site-2.ru).\n  
+   * Сайт должен работать от пользователя site-2.ru\n  
+   * Установить на площадке любой файл менеджер на PHP. Загрузить/удалить с его помощью несколько файлов внутрь сайта(статических(картинки) и динамических файлов(например phpinfo)).\n  
+   * Проверить корректность доступа к загруженным файлам.\n\n
+
+Задание по настройке площадки для работы сайта site-2.ru:
+	1) По аналогии с site.ru(выше)
+		заводим пользователя 
+		useradd -M -r -s /bin/false site-2.ru
+	  Создаем каталоги, выдаем права
+	    sudo mkdir -p /var/www/site-2.ru/ && sudo chown site-2.ru:site-2.ru /var/www/site-2.ru/
+	    sudo mkdir -p /var/www/http_logs/site-2.ru/nginx && sudo chown site-2.ru:site-2.ru /var/www/http_logs/site-2.ru/nginx
+  		sudo mkdir -p /var/www/http_logs/site-2.ru/apache2 && sudo chown site-2.ru:site-2.ru /var/www/http_logs/site-2.ru/apache2
+  		sudo mkdir -p /var/www/http_sessions/site-2.ru && sudo chown site-2.ru:site-2.ru /var/www/http_sessions/site-2.ru
+  		sudo mkdir -p /var/www/tmp_files/site-2.ru && sudo chown site-2.ru:site-2.ru /var/www/tmp_files/site-2.ru
+		Создадим файл настроек site-2.ru.conf для нашего сайт в директории /etc/php/7.4/fpm/pool.d/ со следующим содержимым.
+			[site-2.ru]
+			listen = /var/run/php/php7.4-site-2.ru.sock #Зададим имя сокета согласно имени сайта
+			listen.mode = 0666 #Выставим права
+			user = site-2.ru #Пользователь и группа из под которого будет запускаться
+			group = site-2.ru
+			chdir = /var/www/site-2.ru #Папка в которой будет работать
+			listen.owner = site-2.ru #Владелец сокета
+			listen.group = site-2.ru
+
+			#Изменяем настройки php для сайта. Папка с временными файлами, папка для хранения сессий. Запрещенные функции php
+			php_admin_value[upload_tmp_dir] = /var/www/tmp_files/site-2.ru 
+			php_admin_value[session.save_path] = /var/www/http_sessions/site-2.ru
+			php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source
+			pm = ondemand
+			pm.max_children = 4
+
+#после всех настроек обязательно перезагрузить php-fpm:
+   /etc/init.d/php7.4-fpm restart
+
+
+    2) Создадим конфигурационные файлы для apache2 и nginx путем копирования и правки файлов для сайта site.ru
+    	cp /etc/apache2/sites-available/site.ru.conf /etc/apache2/sites-available/site-2.ru.conf
+        cp /etc/nginx/sites-available/site.ru.conf /etc/nginx/sites-available/site-2.ru.conf
+        Редактируем их в соответствии с требованиями новго сайта.
+        Меняем ServerName, пути к папкам, логам, а так же путь к обработчику php /var/run/php/php7.4-site-2.ru.sock
+        Включаем второй сайт.
+        sudo a2ensite site-2.ru.conf
+        sudo ln -s /etc/nginx/sites-available/site-2.ru.conf /etc/nginx/sites-enabled/site-2.ru.conf
+        sudo service apache2 restart && service nginx restart
+    3) Клонируем репозиторий с простеньким php файловым менеджером (если не установлен git - ставим apt-get install git)
+    	git clone https://github.com/alexantr/filemanager.git
+       Копируем файл filemanager.php в корень сайта 
+        cp filemanager/filemanager.php /var/www/site-2.ru/index.php
+    4) Открываем наш сайт, загружаем/скачиваем файлы.
+
+
+
+* Задание по настройке phpMyAdmin как алиас:\n  
+   * phpMyAdmin должен работать для любого сайта сервера - простым добавлением /phpmyadmin к URL сайта(PMA как алиас).\n  
+   * phpMyAdmin должен быть последней версии, скачанный с официального сайта.\n  
+   * Обеспечить работу phpMyAdmin(без ошибок и предупреждений) и возможность управления базами данных MySQL на данном сервере.\n  
+   * Обеспечить возможность работы \"дополнительных возможностей\" PMA\n  
+   * Статические данные PMA должны отдаваться веб-сервером Nginx.\n\n
+
+
+* Задание по настройке phpMyAdmin как алиас:
+	1)Скачиваем последний phpmyadmin
+		wget https://files.phpmyadmin.net/phpMyAdmin/5.0.4/phpMyAdmin-5.0.4-all-languages.zip
+		Распаковываем
+		unzip phpMyAdmin-5.0.4-all-languages.zip
+        Создаем папку /usr/share/phpmyadmin
+        mkdir /usr/share/phpmyadmin
+        Копируем в нее содержимое 
+        cp -r phpMyAdmin-5.0.4-all-languages/* /usr/share/phpmyadmin/
+        Копируем файл конфигурации
+        cp /usr/share/phpmyadmin/config.sample.inc.php /usr/share/phpmyadmin/config.inc.php
+        Правим его, выставляя значение(32 символа пароль) $cfg['blowfish_secret']
+        Создаем папку для храения временных файлов
+        mkdir /usr/share/phpmyadmin/tmp/
+
+    2) Настраиваем nginx и apache2
+    	в конфигурационных файлах сайтов, в apache выставляем алиаса
+    	Alias /phpmyadmin /usr/share/phpmyadmin
+		Alias /pma /usr/share/phpmyadmin
+
+		В конфигурационных файлах сайтов nginx
+		Обработка статики
+		location ~ \.(gif|jpg|png|ico|zip|bmp|xls|rar)$ {
+		  root /usr/share/phpmyadmin;
+  			try_files /does_not_exists @php;
+		}
+
+		Алиасы
+		location /phpmyadmin {
+		alias /usr/share/phpmyadmin/;
+		}
+
+		location /pma {
+		alias /usr/share/phpmyadmin/;
+		}
+
+
+Так же - необходимо указать аппку с логами сайта в logrotate для apache2, т.к. логи мы вынесли отдельно.
+В /etc/logrotate.d/apache2
+Добавить
+/var/www/http_logs/site-2.ru/apache2/*.log
+/var/www/http_logs/site.ru/apache2/*.log
+
+В /etc/logrotate.d/nginx
+/var/www/http_logs/site-2.ru/nginx/*.log
+/var/www/http_logs/site.ru/nginx/*.log
+
+
+
+
+ Ответ необходимо прислать в виде .tar.gz файла, содержащего директории и файлы с настройками(основные директории сервисов, которые подверглись модификации), а так же структуру каталогов и файлов(в /var/www/) для проверки созданных связок.\n
+ Если с Вашей стороны возникнут какие-либо комментарии к заданию - Вы можете описать их в письме, или вложить файл read.me .\n\n
+
+ ## Ремарка\n\n
+ Площадка под сайт представляет директорию в /var/www/, в которой содержатся:\n\n
+  * Отдельная директория для кода сайта(DOC_ROOT)\n
+  * Отдельная структура директорий для хранения логов сайта\n
+  * Отдельная директория для хранения сессий сайта\n
+  * Отдельная директория для хранения временных файлов сайта\n\n
+
+Тестовое задание необходимо выполнить в ОС Debian 9.
